@@ -42,7 +42,7 @@ export const postPost = async (req, res, next) => {
 
   if (!req.file) {
     const err = new Error("No image provided!");
-    error.status = 422;
+    err.status = 422;
     return next(err);
   }
 
@@ -62,6 +62,74 @@ export const postPost = async (req, res, next) => {
     });
   } catch (err) {
     err.message = "Saving failed!";
+    return next(err);
+  }
+};
+
+export const putPost = async (req, res, next) => {
+  const { title, content } = req.body;
+  const { postId } = req.params;
+  const errors = validator.validationResult(req);
+
+  let imageUrl = req.body.image;
+  if (req.file) {
+    imageUrl = req.file.path;
+  }
+
+  if (!errors.isEmpty()) {
+    const err = new Error("Validation failed, entered data is incorrect!");
+    err.statusCode = 422;
+    return next(err);
+  }
+
+  if (!imageUrl) {
+    const err = new Error("No image provided, no image fallback!");
+    err.status = 422;
+    return next(err);
+  }
+
+  let post;
+  try {
+    post = await Post.findById(postId);
+
+    if (!post) {
+      const err = new Error("No post found, updated failed!");
+      return next(err);
+    }
+  } catch (err) {
+    err = new Error("DB connection failed!");
+    return next(err);
+  }
+
+  post.title = title;
+  post.content = content;
+  post.imageUrl = imageUrl;
+
+  try {
+    const updatedPost = await post.save();
+    res.status(201).json({
+      message: "Post updated successfully!",
+      post: updatedPost,
+    });
+  } catch (err) {
+    err = new Error("DB connection failed!");
+    return next(err);
+  }
+};
+
+export const deletePost = async (req, res, next) => {
+  const { postId } = req.params;
+
+  try {
+    const deletedPost = await Post.deleteOne({ _id: postId });
+
+    if (!deletedPost.deletedCount) {
+      return next(new Error("Such post does not exist!"));
+    }
+
+    res.status(200).json({ message: "Post deleted!" });
+  } catch (err) {
+    err.message = "DB connection failed!";
     return next(err);
   }
 };
