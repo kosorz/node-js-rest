@@ -1,26 +1,37 @@
 import validator from "express-validator";
-import Post from "../models/post";
 import fs from "fs";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
+
+import Post from "../models/post";
+import User from "../models/user";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const getPost = async (req, res, next) => {
   const { postId } = req.params;
 
+  let post;
   try {
-    const post = await Post.findById(postId);
+    post = await Post.findById(postId);
 
     if (!post) {
       return next(new Error("Could not find post!"));
     }
-
-    res.status(200).json({ message: "Post fetched!", post: post });
   } catch (err) {
     err.message = "DB connection failed!";
     return next(err);
   }
+
+  let populatedPost;
+  try {
+    populatedPost = await post.populate("creator").execPopulate();
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  res.status(200).json({ message: "Post fetched!", post: populatedPost });
 };
 
 export const getPosts = async (req, res, next) => {
@@ -41,7 +52,7 @@ export const getPosts = async (req, res, next) => {
       .skip((currentPage - 1) * perPage)
       .limit(perPage);
   } catch (err) {
-    err.message = "DB connection failed! 12312312";
+    err.message = "DB connection failed!";
     return next(err);
   }
 
@@ -53,7 +64,6 @@ export const getPosts = async (req, res, next) => {
 };
 
 export const postPost = async (req, res, next) => {
-  const { title, content } = req.body;
   const errors = validator.validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -64,28 +74,58 @@ export const postPost = async (req, res, next) => {
 
   if (!req.file) {
     const err = new Error("No image provided!");
-    err.status = 422;
+    err.statusCode = 422;
     return next(err);
   }
 
   const imageUrl = req.file.path;
+  const { title, content } = req.body;
+
   const post = new Post({
     title,
     content,
     imageUrl,
-    creator: { name: "Jarek" },
+    creator: req.userId,
   });
 
+  let savedPost;
   try {
-    const savedPost = await post.save();
+    savedPost = await post.save();
+
+    if (!savedPost) {
+      const err = new Error("Saving failed!");
+      return next(err);
+    }
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  let user;
+  try {
+    user = await User.findById(req.userId);
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  user.posts.push(post);
+
+  let savedUser;
+  try {
+    savedUser = await user.save();
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  user &&
+    savedUser &&
     res.status(201).json({
       message: "Post created successfully!",
       post: savedPost,
+      creator: { _id: savedUser._id, name: savedUser.name },
     });
-  } catch (err) {
-    err.message = "Saving failed!";
-    return next(err);
-  }
 };
 
 export const putPost = async (req, res, next) => {
@@ -94,6 +134,7 @@ export const putPost = async (req, res, next) => {
   const errors = validator.validationResult(req);
 
   let imageUrl = req.body.image;
+
   if (req.file) {
     imageUrl = req.file.path;
   }
@@ -106,7 +147,7 @@ export const putPost = async (req, res, next) => {
 
   if (!imageUrl) {
     const err = new Error("No image provided, no image fallback!");
-    err.status = 422;
+    err.statusCode = 422;
     return next(err);
   }
 
@@ -123,7 +164,13 @@ export const putPost = async (req, res, next) => {
     return next(err);
   }
 
-  if (imageUrl !== post.image) {
+  if (post.creator.toString() !== req.userId.toString()) {
+    const err = new Error("Not authorized!");
+    err.statusCode = 403;
+    return next(err);
+  }
+
+  if (imageUrl !== post.imageUrl) {
     clearImage(post.imageUrl);
   }
 
@@ -159,10 +206,13 @@ export const deletePost = async (req, res, next) => {
     return next(err);
   }
 
-  if (true) {
-    // check logged if belongs to logged user
-    clearImage(post.imageUrl);
+  if (post.creator.toString() !== req.userId.toString()) {
+    const err = new Error("Not authorized!");
+    err.statusCode = 403;
+    return next(err);
   }
+
+  clearImage(post.imageUrl);
 
   let postDeleted;
   try {
@@ -172,7 +222,27 @@ export const deletePost = async (req, res, next) => {
     return next(err);
   }
 
-  postDeleted && res.status(200).json({ message: "Post deleted!" });
+  let user;
+  try {
+    user = await User.findById(req.userId);
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  user.posts.pull(postId);
+
+  let savedUser;
+  try {
+    savedUser = await user.save();
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  postDeleted &&
+    savedUser &&
+    res.status(200).json({ message: "Post deleted!" });
 };
 
 const clearImage = (filePath) => {

@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 
 import feedRoutes from "./routes/feed";
+import authRoutes from "./routes/auth";
 
 dotenv.config();
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,7 @@ app.use((req, res, next) => {
 });
 
 app.use("/feed", feedRoutes);
+app.use("/auth", authRoutes);
 
 app.use((err, req, res, next) => {
   console.log(err);
