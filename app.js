@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
+import ioConnect from "socket.io";
 
 import feedRoutes from "./routes/feed";
 import authRoutes from "./routes/auth";
@@ -69,4 +70,13 @@ try {
   console.log(err);
 }
 
-connected && app.listen(8080);
+const startUp = () => {
+  const server = app.listen(8080);
+  const io = ioConnect(server);
+
+  io.on("connection", (socket) => {
+    console.log("Client connected");
+  });
+};
+
+connected && startUp();

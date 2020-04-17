@@ -3,7 +3,26 @@ import validator from "express-validator";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-export const signup = async (req, res, next) => {
+export const getStatus = async (req, res, next) => {
+  let user;
+  try {
+    user = await User.findById(req.userId);
+
+    if (!user) {
+      const err = new Error("User not found in db!");
+      err.statusCode = 401;
+      next(err);
+    }
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  user &&
+    res.status(200).json({ message: "Status fetched", status: user.status });
+};
+
+export const putSignup = async (req, res, next) => {
   const errors = validator.validationResult(req);
   if (!errors.isEmpty()) {
     const err = new Error("Validation failed");
@@ -33,7 +52,38 @@ export const signup = async (req, res, next) => {
   res.status(201).json({ message: "User created!", userId: savedUser._id });
 };
 
-export const login = async (req, res, next) => {
+export const putStatus = async (req, res, next) => {
+  const { status } = req.body;
+
+  let user;
+  try {
+    user = await User.findById(req.userId);
+
+    if (!user) {
+      const err = new Error("User not found in db!");
+      err.statusCode = 401;
+      next(err);
+    }
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  user.status = status;
+
+  let savedUser;
+  try {
+    savedUser = await user.save();
+  } catch (err) {
+    err.message = "DB connection failed!";
+    return next(err);
+  }
+
+  savedUser &&
+    res.status(200).json({ message: "Status updated!", status: user.status });
+};
+
+export const postLogin = async (req, res, next) => {
   const { email, password } = req.body;
 
   let user;

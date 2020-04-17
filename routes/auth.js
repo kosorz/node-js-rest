@@ -1,11 +1,18 @@
 import express from "express";
 import validator from "express-validator";
-import { signup, login } from "../controllers/auth";
+import {
+  getStatus,
+  putSignup,
+  putStatus,
+  postLogin,
+} from "../controllers/auth";
 import User from "../models/user";
+import isAuth from "../middleware/is-auth";
 
 const router = express.Router();
 
-// PUT /auth/signup
+router.get("/status", isAuth, getStatus);
+
 router.put(
   "/signup",
   [
@@ -30,9 +37,11 @@ router.put(
     validator.body("password").trim().isLength({ min: 5 }),
     validator.body("name").trim().not().isEmpty(),
   ],
-  signup
+  putSignup
 );
 
-router.post("/login", login);
+router.put("/status", isAuth, putStatus);
+
+router.post("/login", postLogin);
 
 export default router;
