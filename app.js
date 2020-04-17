@@ -1,16 +1,14 @@
 import express from "express";
 import bodyParser from "body-parser";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
-import ioConnect from "socket.io";
 
 import feedRoutes from "./routes/feed";
 import authRoutes from "./routes/auth";
+import socket from "./socket";
 
-dotenv.config();
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -64,15 +62,15 @@ app.use((err, req, res, next) => {
 let connected;
 try {
   connected = mongoose.connect(
-    `mongodb+srv://${process.env.MONGODB_USER}:${process.env.MONGODB_PASSWORD}@node-training-7n0n7.mongodb.net/social?retryWrites=true&w=majority`
+    `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@node-training-7n0n7.mongodb.net/${process.env.MONGO_DEFAULT_DATABASE}?retryWrites=true&w=majority`
   );
 } catch (err) {
   console.log(err);
 }
 
 const startUp = () => {
-  const server = app.listen(8080);
-  const io = ioConnect(server);
+  const server = app.listen(process.env.PORT || 8080);
+  const io = socket.init(server);
 
   io.on("connection", (socket) => {
     console.log("Client connected");

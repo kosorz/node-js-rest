@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 
 import Post from "../models/post";
 import User from "../models/user";
+import io from "../socket";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,6 +50,8 @@ export const getPosts = async (req, res, next) => {
   let posts;
   try {
     posts = await Post.find()
+      .populate("creator")
+      .sort({ createdAt: -1 })
       .skip((currentPage - 1) * perPage)
       .limit(perPage);
   } catch (err) {
@@ -119,13 +122,19 @@ export const postPost = async (req, res, next) => {
     return next(err);
   }
 
-  user &&
-    savedUser &&
+  const sendResponse = () => {
+    io.getIO().emit("posts", {
+      action: "create",
+      post: { ...post._doc, creator: { _id: req.userId, name: user.name } },
+    });
     res.status(201).json({
       message: "Post created successfully!",
       post: savedPost,
       creator: { _id: savedUser._id, name: savedUser.name },
     });
+  };
+
+  user && savedUser && sendResponse();
 };
 
 export const putPost = async (req, res, next) => {
@@ -153,7 +162,7 @@ export const putPost = async (req, res, next) => {
 
   let post;
   try {
-    post = await Post.findById(postId);
+    post = await Post.findById(postId).populate("creator");
   } catch (err) {
     err = new Error("DB connection failed!");
     return next(err);
@@ -164,7 +173,7 @@ export const putPost = async (req, res, next) => {
     return next(err);
   }
 
-  if (post.creator.toString() !== req.userId.toString()) {
+  if (post.creator._id.toString() !== req.userId.toString()) {
     const err = new Error("Not authorized!");
     err.statusCode = 403;
     return next(err);
@@ -178,16 +187,23 @@ export const putPost = async (req, res, next) => {
   post.content = content;
   post.imageUrl = imageUrl;
 
+  let updatedPost;
   try {
-    const updatedPost = await post.save();
-    res.status(201).json({
-      message: "Post updated successfully!",
-      post: updatedPost,
-    });
+    updatedPost = await post.save();
   } catch (err) {
     err = new Error("DB connection failed!");
     return next(err);
   }
+
+  const sendResponse = () => {
+    io.getIO().emit("posts", {
+      action: "update",
+      post: updatedPost,
+    });
+    res.status(200).json({ message: "Post edited!" });
+  };
+
+  updatedPost && sendResponse();
 };
 
 export const deletePost = async (req, res, next) => {
@@ -240,9 +256,15 @@ export const deletePost = async (req, res, next) => {
     return next(err);
   }
 
-  postDeleted &&
-    savedUser &&
+  const sendResponse = () => {
+    io.getIO().emit("posts", {
+      action: "delete",
+      postId: postId,
+    });
     res.status(200).json({ message: "Post deleted!" });
+  };
+
+  postDeleted && savedUser && sendResponse();
 };
 
 const clearImage = (filePath) => {
