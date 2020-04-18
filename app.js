@@ -1,9 +1,12 @@
 import express from "express";
+import fs from "fs";
 import bodyParser from "body-parser";
 import mongoose from "mongoose";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
+import helmet from "helmet";
+import morgan from "morgan";
 
 import feedRoutes from "./routes/feed";
 import authRoutes from "./routes/auth";
@@ -29,8 +32,14 @@ const fileFilter = (req, file, cb) => {
     cb(null, false);
   }
 };
+const accessLogStream = fs.createWriteStream(
+  path.join(__dirname, "access.log"),
+  { flags: "a" }
+);
 
 const app = express();
+app.use(helmet());
+app.use(morgan("combined", { stream: accessLogStream }));
 
 app.use(bodyParser.json());
 app.use(
@@ -62,7 +71,8 @@ app.use((err, req, res, next) => {
 let connected;
 try {
   connected = mongoose.connect(
-    `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@node-training-7n0n7.mongodb.net/${process.env.MONGO_DEFAULT_DATABASE}?retryWrites=true&w=majority`
+    `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@node-training-7n0n7.mongodb.net/${process.env.MONGO_DEFAULT_DATABASE}?retryWrites=true&w=majority`,
+    { useNewUrlParser: true, useUnifiedTopology: true }
   );
 } catch (err) {
   console.log(err);
